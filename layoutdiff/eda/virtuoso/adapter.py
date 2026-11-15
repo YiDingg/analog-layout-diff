@@ -329,6 +329,30 @@ def replay_source(commands, function, chunk_size=200):
     return "\n".join(bodies), helpers + [function]
 
 
+def creation_parameters(r):
+    """The creation call's parameter triples, and the names it establishes.
+
+    A pcelle parameter is an instance property, but dbReplaceProp validates the
+    property name against the master's parameter definition and refuses a
+    datatype that differs from it ("DB-270000: Datatype for input parameter 'm'
+    does not match the definition"). A source layout may legally hold exactly
+    that: a schematic multiplier ``m = "1"`` is a string property on an integer
+    parameter. Only the creation call can write that state -- it takes
+    (name type value) triples and does not consult the definition -- so the
+    recorded property type/value replaces the recorded parameter there, and the
+    property must not be replayed afterwards.
+    """
+    parameters = [list(p) for p in r.get("params") or []]
+    held = {name: (typ, value) for name, typ, value in r.get("props") or []}
+    applied = set()
+    for parameter in parameters:
+        prop = held.get(parameter[0])
+        if prop and parameter[1] != prop[0] and prop[0] != "hierProp":
+            parameter[1], parameter[2] = prop
+            applied.add(parameter[0])
+    return parameters, applied
+
+
 def render(snapshot, *, review_token=None):
     from layoutdiff.eda.virtuoso.logical_groups import pin_key, inst_term_key
     from layoutdiff.eda.virtuoso.oa_content import LINK_FIELDS, replay_items
@@ -378,6 +402,7 @@ def render(snapshot, *, review_token=None):
         commands.append(f"ALDGUIBeginReview({sk(review_token)} cv)")
     for key, r in replay_items(snapshot):
         kind = r["kind"]
+        created_parameters = set()
         if kind in LINK_FIELDS and mpp_properties:
             commands += mpp_properties
             mpp_properties = []
@@ -402,10 +427,12 @@ def render(snapshot, *, review_token=None):
                           'ordered' if r['isOrdered'] else 'unordered',
                           'uniqueName' if r['isUniqueName'] else 'nonUniqueName', r['deleteWhen']]
             expr = f"dbCreateGroup(cv {sk(r['name'])} {sk(attributes)} {sk(r['defName'])})"
-        elif kind == "inst":
-            expr = f"dbCreateParamInstByMasterName(cv {sk(r['libName'])} {sk(r['cellName'])} {sk(r['viewName'])} {sk(r['name'])} {sk(dim(r['xy']))} {sk(r['orient'])} {sk(r['numInst'])} {sk(r['params'])} {sk(r['physOnly'])})"
-        elif kind == "mosaic":
-            expr = f"dbCreateParamSimpleMosaicByMasterName(cv {sk(r['libName'])} {sk(r['cellName'])} {sk(r['viewName'])} {sk(r['name'])} {sk(dim(r['xy']))} {sk(r['tileArray'][0])} {sk(r['rows'])} {sk(r['columns'])} {sk(dim(r['uY']))} {sk(dim(r['uX']))} {sk(r['params'])})"
+        elif kind in {"inst", "mosaic"}:
+            parameters, created_parameters = creation_parameters(r)
+            if kind == "inst":
+                expr = f"dbCreateParamInstByMasterName(cv {sk(r['libName'])} {sk(r['cellName'])} {sk(r['viewName'])} {sk(r['name'])} {sk(dim(r['xy']))} {sk(r['orient'])} {sk(r['numInst'])} {sk(parameters)} {sk(r['physOnly'])})"
+            else:
+                expr = f"dbCreateParamSimpleMosaicByMasterName(cv {sk(r['libName'])} {sk(r['cellName'])} {sk(r['viewName'])} {sk(r['name'])} {sk(dim(r['xy']))} {sk(r['tileArray'][0])} {sk(r['rows'])} {sk(r['columns'])} {sk(dim(r['uY']))} {sk(dim(r['uX']))} {sk(parameters)})"
         elif kind == "prBoundary":
             expr = f"dbCreatePRBoundary(cv {sk(dim(r['points']))})"
         elif kind == 'snapBoundary':
@@ -465,7 +492,8 @@ def render(snapshot, *, review_token=None):
         if review_token:
             commands.append(f"ALDGUIRemember({sk(review_token)} {sk(key)} o)")
         if not (r.get('mpp') or r.get('mppOwner')):
-            commands += prop_cmds("o", r.get("props", []))
+            commands += prop_cmds("o", [p for p in r.get("props", [])
+                                        if p[0] not in created_parameters])
         if kind in LINK_FIELDS and r.get('parent'):
             commands.append(f"o~>parent={reference('parent')}")
         if kind in {'areaBlockage', 'layerBlockage'}:
