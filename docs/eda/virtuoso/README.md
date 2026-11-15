@@ -9,6 +9,19 @@ It supplies execution/transport and native utility APIs, while this package owns
 Layout Diff's OA/ROD record model and replay helpers. See
 [Bridge integration](../../runtime/BRIDGE.md) for installation and connection setup.
 
+## Verified native environments
+
+The adapter is verified to run under Virtuoso **IC23.1 (OA 22.61)** and Virtuoso
+**IC618 (OA 22.60)**. IC23.1 stays the reference for the native API behaviour
+described in these guides. On a live IC618 session, capture and reconstruction
+into a fresh cell with native readback were exercised, and the CIW-launched
+worker that serves the toolbar and history review runs there.
+
+Results measured on one generation are stated per call rather than assumed to
+transfer. Where both were measured they agreed, including the refusal of
+`dbReplaceProp` to rewrite a pcelle parameter property whose datatype differs
+from the master definition.
+
 ## Capture and reconstruction
 
 Capture reads native state, scales geometry to integer DBU, decodes typed

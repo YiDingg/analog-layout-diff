@@ -2,7 +2,9 @@
 
 This guide describes the current processing pipeline. The [data model](../data/MODEL.md)
 defines the information boundary; [format specifications](../data/STORAGE_FORMAT.md)
-define exact serialization. Native API details refer to Virtuoso IC23.1.
+define exact serialization. Native API details refer to Virtuoso IC23.1; the same
+adapter is verified under IC618 (OA 22.60) as well, see
+[verified native environments](../eda/virtuoso/README.md#verified-native-environments).
 For process boundaries, module blocks and GUI interaction sequences, see
 [Program structure](PROGRAM_STRUCTURE.md).
 
